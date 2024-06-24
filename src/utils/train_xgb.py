@@ -7,14 +7,15 @@ from tqdm import tqdm
 from src.utils.amex_metric import amex_metric
 from src.utils.amex_metric import amex_scorer
 
-def train_xgb(X_train, y_train, X_v, y_v, n=10):
+def train_xgb(X_train, y_train, X_v, y_v, n=10, params=None):
     '''
     Because of subsampling and early stopping, training XGBoost on the same data multiple times
     will lead to slightly different results. To mitigate this, we train n times with different 
     seeds and average the results.
     '''
-    with open('../config/xgboost.json', 'r') as f:
-        params = json.load(f)
+    if params is None:
+        with open('../config/xgboost.json', 'r') as f:
+            params = json.load(f)
     dtrain = xgb.DMatrix(X_train, y_train)
     dv = xgb.DMatrix(X_v, y_v)
     amex_metrics = []
