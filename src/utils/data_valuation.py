@@ -3,10 +3,8 @@ import numpy as np
 import xgboost as xgb
 
 from tqdm import tqdm
-from data_iq import DataIQ_SKLearn
-from xgboost import XGBClassifier
 
-from src.utils.amex_metric import amex_metric
+from src.utils.data_iq import DataIQ_xgb
 from src.utils.amex_metric import amex_scorer
 
 def compute_knn_shapley(X_train, y_train, X_test, y_test, k=5):
@@ -38,7 +36,7 @@ def compute_forget(X_train, y_train, X_test, y_test):
         params = json.load(f)
     dtrain = xgb.DMatrix(X_train, y_train)
     dtest = xgb.DMatrix(X_test, label=y_test)
-    bst = xgb.train(params, dtrain, num_boost_round=9999, seed=0, verbose_eval=0,
+    bst = xgb.train(params, dtrain, num_boost_round=9999, verbose_eval=0,
                     evals=[(dtrain, 'train'), (dtest, 'test')], custom_metric=amex_scorer, 
                     early_stopping_rounds=100, maximize=True)
     forget = np.zeros(len(X_train)) # FORGETTING EVENTS COUNTER
@@ -56,20 +54,15 @@ def compute_dataiq(X_train, y_train, X_test, y_test):
     '''
     Estimation of aleatoric and epistematic uncertainty for xgboost as per Seedat et al., 2022.
     '''
-    dataiq_xgb = DataIQ_SKLearn(X=X_train, y=y_train)
-    clf = XGBClassifier(objective='binary:logistic',
-                       device='cuda',
-                       max_depth=4,
-                       learning_rate=0.05,
-                       subsample=0.6,
-                       colsample_bytree=0.8,
-                       n_estimators=9999)
-    clf.fit(X_train, y_train,
-            eval_set=[(X_test, y_test)],
-            eval_metric=amex_scorer,
-            early_stopping_rounds=100,
-            verbose=False)
-    for ix in tqdm(range(1, clf.best_iteration + 1)):
-        dataiq_xgb.on_epoch_end(clf=clf, iteration=ix)
+    with open('../config/xgboost.json', 'r') as f:
+        params = json.load(f)
+    dataiq_xgb = DataIQ_xgb(X_train=X_train, y_train=y_train)
+    dtrain = xgb.DMatrix(X_train, y_train)
+    dtest = xgb.DMatrix(X_test, label=y_test)
+    bst = xgb.train(params, dtrain, num_boost_round=9999, verbose_eval=0,
+                    evals=[(dtrain, 'train'), (dtest, 'test')], custom_metric=amex_scorer, 
+                    early_stopping_rounds=100, maximize=True)
+    for ix in tqdm(range(1, bst.best_iteration + 1)):
+        dataiq_xgb.on_epoch_end(bst=bst, iteration=ix)
     return dataiq_xgb.aleatoric, dataiq_xgb.confidence
     
